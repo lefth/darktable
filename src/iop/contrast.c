@@ -308,7 +308,7 @@ static inline void compute_smoothed_luminance_mask(const float *const restrict i
 __DT_CLONE_TARGETS__
 static inline void apply_local_contrast(const float *const restrict in,
                                         const float *const restrict luminance_pixel,
-                                        const float *const restrict luminance_smoothed,
+                                        const float *const restrict luminance_smoothed_local,
                                         const float *const restrict luminance_smoothed_coarse,
                                         const float *const restrict luminance_smoothed_broad,
                                         const float *const restrict luminance_smoothed_fine,
@@ -337,7 +337,7 @@ static inline void apply_local_contrast(const float *const restrict in,
   for(size_t k = 0; k < npixels; k++)
   {
     const float lum_pixel = fmaxf(luminance_pixel[k], MIN_FLOAT);
-    const float lum_smoothed = fmaxf(luminance_smoothed[k], MIN_FLOAT);
+    const float lum_smoothed = fmaxf(luminance_smoothed_local[k], MIN_FLOAT);
 
     // Detail in log space (EV): how much brighter/darker is this pixel
     // compared to its local neighborhood
@@ -678,15 +678,15 @@ static void spatial_contrast_process(dt_iop_module_t *self,
         dt_iop_gui_enter_critical_section(self);
         g->thumb_preview_hash = hash;
         compute_pixel_luminance_mask(in, luminance_pixel, width, height, d->method);
-        if(d->coarse_scale != 1.0f || g->mask_display == DT_LC_MASK_coarse)
+        if(d->scale[DT_LC_MASK_coarse] != 1.0f || g->mask_display == DT_LC_MASK_coarse)
           compute_smoothed_luminance_mask(in, luminance_smoothed_coarse, width, height, d, d->radius[DT_LC_MASK_coarse], base_eps * fmaxf(d->f_mult[DT_LC_MASK_coarse], 0.5f));
-        if(d->broad_scale != 1.0f || g->mask_display == DT_LC_MASK_broad)
+        if(d->scale[DT_LC_MASK_broad] != 1.0f || g->mask_display == DT_LC_MASK_broad)
           compute_smoothed_luminance_mask(in, luminance_smoothed_broad, width, height, d, d->radius[DT_LC_MASK_broad], base_eps * fmaxf(d->f_mult[DT_LC_MASK_broad], 0.5f));
-        if(d->local_scale != 1.0f || g->mask_display == DT_LC_MASK_local)
-          compute_smoothed_luminance_mask(in, luminance_smoothed, width, height, d, d->radius[DT_LC_MASK_local], base_eps * fmaxf(d->f_mult[DT_LC_MASK_local], 0.5f));
-        if(d->fine_scale != 1.0f || g->mask_display == DT_LC_MASK_FINE)
+        if(d->scale[DT_LC_MASK_local] != 1.0f || g->mask_display == DT_LC_MASK_local)
+          compute_smoothed_luminance_mask(in, luminance_smoothed_local, width, height, d, d->radius[DT_LC_MASK_local], base_eps * fmaxf(d->f_mult[DT_LC_MASK_local], 0.5f));
+        if(d->scale[DT_LC_MASK_FINE] != 1.0f || g->mask_display == DT_LC_MASK_FINE)
           compute_smoothed_luminance_mask(in, luminance_smoothed_fine, width, height, d, d->radius[DT_LC_MASK_FINE], base_eps * fmaxf(d->f_mult[DT_LC_MASK_FINE], 0.5f));
-        if(d->micro_scale != 1.0f || g->mask_display == DT_LC_MASK_MICRO)
+        if(d->scale[DT_LC_MASK_MICRO] != 1.0f || g->mask_display == DT_LC_MASK_MICRO)
           compute_smoothed_luminance_mask(in, luminance_smoothed_micro, width, height, d, d->radius[DT_LC_MASK_MICRO], base_eps * fmaxf(d->f_mult[DT_LC_MASK_MICRO], 0.5f));
         g->luminance_valid = TRUE;
         dt_iop_gui_leave_critical_section(self);
@@ -699,15 +699,15 @@ static void spatial_contrast_process(dt_iop_module_t *self,
         // Les guards incluent g->mask_display pour garantir que le buffer est calculé
         // même quand scale == 1.0, si l'utilisateur a activé la visualisation du masque.
         compute_pixel_luminance_mask(in, luminance_pixel, width, height, d->method);
-        if(d->coarse_scale != 1.0f || g->mask_display == DT_LC_MASK_coarse)
+        if(d->scale[DT_LC_MASK_coarse] != 1.0f || g->mask_display == DT_LC_MASK_coarse)
           compute_smoothed_luminance_mask(in, luminance_smoothed_coarse, width, height, d, d->radius[DT_LC_MASK_coarse],base_eps * fmaxf(d->f_mult[DT_LC_MASK_coarse], 0.5f));
-        if(d->broad_scale != 1.0f  || g->mask_display == DT_LC_MASK_broad)
+        if(d->scale[DT_LC_MASK_broad] != 1.0f  || g->mask_display == DT_LC_MASK_broad)
           compute_smoothed_luminance_mask(in, luminance_smoothed_broad,  width, height, d, d->radius[DT_LC_MASK_broad], base_eps * fmaxf(d->f_mult[DT_LC_MASK_broad],  0.5f));
-        if(d->local_scale != 1.0f  || g->mask_display == DT_LC_MASK_local)
-          compute_smoothed_luminance_mask(in, luminance_smoothed,        width, height, d, d->radius[DT_LC_MASK_local], base_eps * fmaxf(d->f_mult[DT_LC_MASK_local],  0.5f));
-        if(d->fine_scale != 1.0f   || g->mask_display == DT_LC_MASK_FINE)
+        if(d->scale[DT_LC_MASK_local] != 1.0f  || g->mask_display == DT_LC_MASK_local)
+          compute_smoothed_luminance_mask(in, luminance_smoothed_local, width, height, d, d->radius[DT_LC_MASK_local], base_eps * fmaxf(d->f_mult[DT_LC_MASK_local],  0.5f));
+        if(d->scale[DT_LC_MASK_FINE] != 1.0f   || g->mask_display == DT_LC_MASK_FINE)
           compute_smoothed_luminance_mask(in, luminance_smoothed_fine,   width, height, d, d->radius[DT_LC_MASK_FINE],  base_eps * fmaxf(d->f_mult[DT_LC_MASK_FINE],   0.5f));
-        if(d->micro_scale != 1.0f  || g->mask_display == DT_LC_MASK_MICRO)
+        if(d->scale[DT_LC_MASK_MICRO] != 1.0f  || g->mask_display == DT_LC_MASK_MICRO)
           compute_smoothed_luminance_mask(in, luminance_smoothed_micro,  width, height, d, d->radius[DT_LC_MASK_MICRO], base_eps * fmaxf(d->f_mult[DT_LC_MASK_MICRO],  0.5f));
     }
   }
@@ -716,7 +716,7 @@ static void spatial_contrast_process(dt_iop_module_t *self,
     compute_pixel_luminance_mask(in, luminance_pixel, width, height, d->method);
     compute_smoothed_luminance_mask(in, luminance_smoothed_coarse, width, height, d, d->radius[DT_LC_MASK_coarse], base_eps * fmaxf(d->f_mult[DT_LC_MASK_coarse], 0.5f));
     compute_smoothed_luminance_mask(in, luminance_smoothed_broad,  width, height, d, d->radius[DT_LC_MASK_broad],  base_eps * fmaxf(d->f_mult[DT_LC_MASK_broad],  0.5f));
-    compute_smoothed_luminance_mask(in, luminance_smoothed,        width, height, d, d->radius[DT_LC_MASK_local],  base_eps * fmaxf(d->f_mult[DT_LC_MASK_local],  0.5f));
+    compute_smoothed_luminance_mask(in, luminance_smoothed_local,  width, height, d, d->radius[DT_LC_MASK_local],  base_eps * fmaxf(d->f_mult[DT_LC_MASK_local],  0.5f));
     compute_smoothed_luminance_mask(in, luminance_smoothed_fine,   width, height, d, d->radius[DT_LC_MASK_FINE],   base_eps * fmaxf(d->f_mult[DT_LC_MASK_FINE],   0.5f));
     compute_smoothed_luminance_mask(in, luminance_smoothed_micro,  width, height, d, d->radius[DT_LC_MASK_MICRO],  base_eps * fmaxf(d->f_mult[DT_LC_MASK_MICRO],  0.5f));
   }
@@ -726,10 +726,10 @@ static void spatial_contrast_process(dt_iop_module_t *self,
   {
     // Select the buffer corresponding to the requested mask level.
     // DT_LC_MASK_local is handled explicitly (not silently via the default assignment).
-    float *lum_smooth = luminance_smoothed; // fallback : local level
+    float *lum_smooth = luminance_smoothed_local; // fallback : local level
     if     (g->mask_display == DT_LC_MASK_coarse) lum_smooth = luminance_smoothed_coarse;
     else if(g->mask_display == DT_LC_MASK_broad)  lum_smooth = luminance_smoothed_broad;
-    else if(g->mask_display == DT_LC_MASK_local)  lum_smooth = luminance_smoothed;
+    else if(g->mask_display == DT_LC_MASK_local)  lum_smooth = luminance_smoothed_local;
     else if(g->mask_display == DT_LC_MASK_FINE)   lum_smooth = luminance_smoothed_fine;
     else if(g->mask_display == DT_LC_MASK_MICRO)  lum_smooth = luminance_smoothed_micro;
 
@@ -849,11 +849,11 @@ void commit_params(dt_iop_module_t *self,
   
   // The multipliers determine how the base epsilon for the guided filter is scaled for each detail level.
   // The multiplier coefficients were determined following a series of empirical tests.
-  d->f_mult[DT_LC_MASK_MICRO]    = (1.0f / fmaxf(p->f_mult[DT_LC_MASK_coarse], NORM_MIN)) * 0.50f;
-  d->f_mult[DT_LC_MASK_FINE]     = (1.0f / fmaxf(p->f_mult[DT_LC_MASK_broad],  NORM_MIN)) * 0.75f;
-  d->f_mult[DT_LC_MASK_local]    = (1.0f / fmaxf(p->f_mult[DT_LC_MASK_local],  NORM_MIN)) * 1.0f;
-  d->f_mult[DT_LC_MASK_broad]    = (1.0f / fmaxf(p->f_mult[DT_LC_MASK_broad],  NORM_MIN)) * 1.60f;
-  d->f_mult[DT_LC_MASK_coarse]   = (1.0f / fmaxf(p->f_mult[DT_LC_MASK_coarse], NORM_MIN)) * 2.25f;
+  d->f_mult[DT_LC_MASK_MICRO]    = (1.0f / fmaxf(p->f_mult_coarse, NORM_MIN)) * 0.50f;
+  d->f_mult[DT_LC_MASK_FINE]     = (1.0f / fmaxf(p->f_mult_broad,  NORM_MIN)) * 0.75f;
+  d->f_mult[DT_LC_MASK_local]    = (1.0f / fmaxf(p->f_mult_local,  NORM_MIN)) * 1.0f;
+  d->f_mult[DT_LC_MASK_broad]    = (1.0f / fmaxf(p->f_mult_fine,  NORM_MIN)) * 1.60f;
+  d->f_mult[DT_LC_MASK_coarse]   = (1.0f / fmaxf(p->f_mult_micro, NORM_MIN)) * 2.25f;
   
   // The multipliers determine how the blending parameter maps to the radius for each scale.
   // The multipliers coefficients were determined following a series of empirical tests.
