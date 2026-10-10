@@ -1459,8 +1459,12 @@ void commit_params(dt_iop_module_t *self,
                    dt_dev_pixelpipe_t *pipe,
                    dt_dev_pixelpipe_iop_t *piece)
 {
-  const dt_iop_colorin_params_t *p = (dt_iop_colorin_params_t *)p1;
+  dt_iop_colorin_params_t *p = (dt_iop_colorin_params_t *)p1;
   dt_iop_colorin_data_t *d = piece->data;
+
+  // history entries from previous versions may still contain absolute paths
+  _normalize_profile_filename(p->type, p->filename, sizeof(p->filename));
+  _normalize_profile_filename(p->type_work, p->filename_work, sizeof(p->filename_work));
 
   d->type = p->type;
   d->type_work = p->type_work;
