@@ -44,7 +44,7 @@
 #define DT_IOP_COLOR_ICC_LEN 512
 #define LUT_SAMPLES 0x10000
 
-DT_MODULE_INTROSPECTION(5, dt_iop_colorout_params_t)
+DT_MODULE_INTROSPECTION(6, dt_iop_colorout_params_t)
 
 typedef struct dt_iop_colorout_data_t
 {
@@ -134,6 +134,18 @@ dt_iop_colorspace_type_t output_colorspace(dt_iop_module_t *self,
   return cst;
 }
 
+static void _normalize_profile_filename(const dt_colorspaces_color_profile_type_t type,
+                                        char *const filename,
+                                        const size_t filename_size)
+{
+  if(type != DT_COLORSPACE_FILE) return;
+
+  filename[filename_size - 1] = '\0';
+  char *basename = filename + strlen(filename);
+  while(basename > filename && basename[-1] != '/' && basename[-1] != '\\') basename--;
+  if(basename != filename) memmove(filename, basename, strlen(basename) + 1);
+}
+
 int legacy_params(dt_iop_module_t *self,
                   const void *const old_params,
                   const int old_version,
@@ -194,10 +206,11 @@ int legacy_params(dt_iop_module_t *self,
     }
 
     n->intent = o->intent;
+    _normalize_profile_filename(n->type, n->filename, sizeof(n->filename));
 
     *new_params = n;
     *new_params_size = sizeof(dt_iop_colorout_params_v5_t);
-    *new_version = 5;
+    *new_version = 6;
     return 0;
   }
   if(old_version == 4)
@@ -218,10 +231,23 @@ int legacy_params(dt_iop_module_t *self,
     dt_strlcpy_fixed_to_fixed(n->filename, sizeof(n->filename),
                               o->filename, sizeof(o->filename));
     n->intent = o->intent;
+    _normalize_profile_filename(n->type, n->filename, sizeof(n->filename));
 
     *new_params = n;
     *new_params_size = sizeof(dt_iop_colorout_params_v5_t);
-    *new_version = 5;
+    *new_version = 6;
+    return 0;
+  }
+  if(old_version == 5)
+  {
+    const dt_iop_colorout_params_v5_t *o = (dt_iop_colorout_params_v5_t *)old_params;
+    dt_iop_colorout_params_t *n = malloc(sizeof(dt_iop_colorout_params_t));
+    memcpy(n, o, sizeof(*n));
+    _normalize_profile_filename(n->type, n->filename, sizeof(n->filename));
+
+    *new_params = n;
+    *new_params_size = sizeof(dt_iop_colorout_params_t);
+    *new_version = 6;
     return 0;
   }
 
@@ -266,6 +292,7 @@ static void _output_profile_changed(GtkWidget *widget, dt_iop_module_t *self)
     {
       p->type = pp->type;
       dt_strlcpy_to_fixed(p->filename, pp->filename, sizeof(p->filename));
+      _normalize_profile_filename(p->type, p->filename, sizeof(p->filename));
       dt_dev_add_history_item(darktable.develop, self, TRUE);
 
       DT_CONTROL_SIGNAL_RAISE(DT_SIGNAL_CONTROL_PROFILE_USER_CHANGED, DT_COLORSPACES_PROFILE_TYPE_EXPORT);
@@ -562,6 +589,7 @@ void commit_params(dt_iop_module_t *self, dt_iop_params_t *p1, dt_dev_pixelpipe_
 
   // stored params need not terminate the file name
   p->filename[sizeof(p->filename) - 1] = '\0';
+  _normalize_profile_filename(p->type, p->filename, sizeof(p->filename));
 
   d->type = p->type;
 
@@ -601,6 +629,7 @@ void commit_params(dt_iop_module_t *self, dt_iop_params_t *p1, dt_dev_pixelpipe_
     {
       p->type = pipe->icc_type;
       dt_strlcpy_to_fixed(p->filename, pipe->icc_filename, sizeof(p->filename));
+      _normalize_profile_filename(p->type, p->filename, sizeof(p->filename));
     }
     if((unsigned int)pipe->icc_intent < DT_INTENT_LAST) p->intent = pipe->icc_intent;
 
@@ -822,8 +851,9 @@ void gui_update(dt_iop_module_t *self)
   for(GList *iter = darktable.color_profiles->profiles; iter; iter = g_list_next(iter))
   {
     dt_colorspaces_color_profile_t *pp = iter->data;
-    if(pp->out_pos > -1 &&
-       p->type == pp->type && (p->type != DT_COLORSPACE_FILE || !strcmp(p->filename, pp->filename)))
+    if(pp->out_pos > -1 && p->type == pp->type
+       && (p->type != DT_COLORSPACE_FILE
+         || dt_colorspaces_is_profile_equal(pp->filename, p->filename)))
     {
       dt_bauhaus_combobox_set(g->output_profile, pp->out_pos);
       return;
