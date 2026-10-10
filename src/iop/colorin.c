@@ -1465,6 +1465,20 @@ void commit_params(dt_iop_module_t *self,
   // history entries from previous versions may still contain absolute paths
   _normalize_profile_filename(p->type, p->filename, sizeof(p->filename));
   _normalize_profile_filename(p->type_work, p->filename_work, sizeof(p->filename_work));
+  if(p->type == DT_COLORSPACE_FILE)
+  {
+    const dt_colorspaces_color_profile_t *const profile =
+      dt_colorspaces_get_profile(p->type, p->filename, DT_PROFILE_DIRECTION_IN);
+    if(profile)
+      dt_strlcpy_to_fixed(p->filename, profile->filename, sizeof(p->filename));
+  }
+  if(p->type_work == DT_COLORSPACE_FILE)
+  {
+    const dt_colorspaces_color_profile_t *const profile =
+      dt_colorspaces_get_profile(p->type_work, p->filename_work, DT_PROFILE_DIRECTION_WORK);
+    if(profile)
+      dt_strlcpy_to_fixed(p->filename_work, profile->filename, sizeof(p->filename_work));
+  }
 
   d->type = p->type;
   d->type_work = p->type_work;

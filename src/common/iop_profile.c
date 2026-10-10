@@ -757,18 +757,21 @@ dt_ioppr_set_pipe_input_profile_info(struct dt_develop_t *dev,
                                      const int intent,
                                      const dt_colormatrix_t matrix_in)
 {
+  const dt_colorspaces_color_profile_t *const input_profile =
+    dt_colorspaces_get_profile(type, filename, DT_PROFILE_DIRECTION_IN);
+  const char *const profile_filename = input_profile ? input_profile->filename : filename;
   dt_iop_order_iccprofile_info_t *profile_info =
-    dt_ioppr_add_profile_info_to_list(dev, type, filename, intent);
+    dt_ioppr_add_profile_info_to_list(dev, type, profile_filename, intent);
 
   if(profile_info == NULL)
   {
     if(dt_pipe_is_preview(pipe) && (type == DT_COLORSPACE_FILE))
-      dt_control_log(_("input icc profile '%s' missing"), filename);
+      dt_control_log(_("input icc profile '%s' missing"), profile_filename);
 
     dt_print(DT_DEBUG_PIPE,
              "[dt_ioppr_set_pipe_input_profile_info] profile `%s' in `%s'"
              " replaced by linear Rec2020",
-             dt_colorspaces_get_name(type, NULL), filename);
+             dt_colorspaces_get_name(type, NULL), profile_filename);
     profile_info = dt_ioppr_add_profile_info_to_list(dev, DT_COLORSPACE_LIN_REC2020, "", intent);
   }
 
