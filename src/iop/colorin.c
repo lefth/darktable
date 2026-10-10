@@ -63,7 +63,7 @@
 
 #define LUT_SAMPLES 0x10000
 
-DT_MODULE_INTROSPECTION(8, dt_iop_colorin_params_t)
+DT_MODULE_INTROSPECTION(7, dt_iop_colorin_params_t)
 
 static void update_profile_list(dt_iop_module_t *self);
 
@@ -199,18 +199,6 @@ static void _resolve_work_profile(dt_colorspaces_color_profile_type_t *work_type
            dt_colorspaces_get_name(*work_type, work_filename));
   *work_type = DT_COLORSPACE_LIN_REC2020;
   work_filename[0] = '\0';
-}
-
-static void _normalize_profile_filename(const dt_colorspaces_color_profile_type_t type,
-                                        char *const filename,
-                                        const size_t filename_size)
-{
-  if(type != DT_COLORSPACE_FILE) return;
-
-  filename[filename_size - 1] = '\0';
-  char *basename = filename + strlen(filename);
-  while(basename > filename && basename[-1] != '/' && basename[-1] != '\\') basename--;
-  if(basename != filename) memmove(filename, basename, strlen(basename) + 1);
 }
 
 // Start of dng image support for ProfileHueSatMapDims and ProfileHueSatMapData
@@ -419,10 +407,9 @@ int legacy_params(dt_iop_module_t *self,
     new->type_work = DT_COLORSPACE_LIN_REC709;
     new->filename_work[0] = '\0';
 
-    _normalize_profile_filename(new->type, new->filename, sizeof(new->filename));
     *new_params = new;
     *new_params_size = sizeof(dt_iop_colorin_params_v7_t);
-    *new_version = 8;
+    *new_version = 7;
     return 0;
   }
   if(old_version == 2)
@@ -478,10 +465,9 @@ int legacy_params(dt_iop_module_t *self,
     new->type_work = DT_COLORSPACE_LIN_REC709;
     new->filename_work[0] = '\0';
 
-    _normalize_profile_filename(new->type, new->filename, sizeof(new->filename));
     *new_params = new;
     *new_params_size = sizeof(dt_iop_colorin_params_v7_t);
-    *new_version = 8;
+    *new_version = 7;
     return 0;
   }
   if(old_version == 3)
@@ -538,10 +524,9 @@ int legacy_params(dt_iop_module_t *self,
     new->type_work = DT_COLORSPACE_LIN_REC709;
     new->filename_work[0] = '\0';
 
-    _normalize_profile_filename(new->type, new->filename, sizeof(new->filename));
     *new_params = new;
     *new_params_size = sizeof(dt_iop_colorin_params_v7_t);
-    *new_version = 8;
+    *new_version = 7;
     return 0;
   }
   if(old_version == 4)
@@ -568,10 +553,10 @@ int legacy_params(dt_iop_module_t *self,
     new->type_work = DT_COLORSPACE_LIN_REC709;
     new->filename_work[0] = '\0';
 
-    _normalize_profile_filename(new->type, new->filename, sizeof(new->filename));
+
     *new_params = new;
     *new_params_size = sizeof(dt_iop_colorin_params_v7_t);
-    *new_version = 8;
+    *new_version = 7;
     return 0;
   }
   if(old_version == 5)
@@ -602,18 +587,17 @@ int legacy_params(dt_iop_module_t *self,
     dt_strlcpy_fixed_to_fixed(new->filename_work, sizeof(new->filename_work),
                               old->filename_work, sizeof(old->filename_work));
     _resolve_work_profile(&new->type_work, new->filename_work);
-    _normalize_profile_filename(new->type, new->filename, sizeof(new->filename));
-    _normalize_profile_filename(new->type_work, new->filename_work, sizeof(new->filename_work));
 
     *new_params = new;
     *new_params_size = sizeof(dt_iop_colorin_params_v7_t);
-    *new_version = 8;
+    *new_version = 7;
     return 0;
   }
   if(old_version == 6)
   {
-    // The structure is equal to v7 but a new version was introduced to convert
-    // invalid working profile choice to the default, linear Rec2020.
+    // The structure is equal to to v7 (current) but a new version is
+    // introduced to convert invalid working profile choice to the
+    // default, linear Rec2020.
     typedef struct dt_iop_colorin_params_v6_t
     {
       dt_colorspaces_color_profile_type_t type;
@@ -633,25 +617,10 @@ int legacy_params(dt_iop_module_t *self,
     new->filename[sizeof(new->filename) - 1] = '\0';
     new->filename_work[sizeof(new->filename_work) - 1] = '\0';
     _resolve_work_profile(&new->type_work, new->filename_work);
-    _normalize_profile_filename(new->type, new->filename, sizeof(new->filename));
-    _normalize_profile_filename(new->type_work, new->filename_work, sizeof(new->filename_work));
 
     *new_params = new;
     *new_params_size = sizeof(dt_iop_colorin_params_v7_t);
-    *new_version = 8;
-    return 0;
-  }
-  if(old_version == 7)
-  {
-    const dt_iop_colorin_params_v7_t *old = (dt_iop_colorin_params_v7_t *)old_params;
-    dt_iop_colorin_params_t *new = malloc(sizeof(dt_iop_colorin_params_t));
-    memcpy(new, old, sizeof(*new));
-    _normalize_profile_filename(new->type, new->filename, sizeof(new->filename));
-    _normalize_profile_filename(new->type_work, new->filename_work, sizeof(new->filename_work));
-
-    *new_params = new;
-    *new_params_size = sizeof(dt_iop_colorin_params_t);
-    *new_version = 8;
+    *new_version = 7;
     return 0;
   }
   return 1;
@@ -702,7 +671,6 @@ static void _profile_changed(GtkWidget *widget, dt_iop_module_t *self)
                                 || pp->type == DT_COLORSPACE_DNG_LOOK;
       p->type = pp->type;
       memcpy(p->filename, pp->filename, sizeof(p->filename));
-      _normalize_profile_filename(p->type, p->filename, sizeof(p->filename));
       dt_dev_add_history_item(darktable.develop, self, TRUE);
       // top-only sync would leave dng_look's enablement stale on the other pipes
       if(old_look != new_look)
@@ -747,7 +715,6 @@ static void _workicc_changed(GtkWidget *widget, dt_iop_module_t *self)
   {
     p->type_work = type_work;
     dt_strlcpy_to_fixed(p->filename_work, filename_work, sizeof(p->filename_work));
-    _normalize_profile_filename(p->type_work, p->filename_work, sizeof(p->filename_work));
 
     const dt_iop_order_iccprofile_info_t *const work_profile =
       dt_ioppr_add_profile_info_to_list(self->dev, p->type_work,
@@ -1459,12 +1426,8 @@ void commit_params(dt_iop_module_t *self,
                    dt_dev_pixelpipe_t *pipe,
                    dt_dev_pixelpipe_iop_t *piece)
 {
-  dt_iop_colorin_params_t *p = (dt_iop_colorin_params_t *)p1;
+  const dt_iop_colorin_params_t *p = (dt_iop_colorin_params_t *)p1;
   dt_iop_colorin_data_t *d = piece->data;
-
-  // history entries from previous versions may still contain absolute paths
-  _normalize_profile_filename(p->type, p->filename, sizeof(p->filename));
-  _normalize_profile_filename(p->type_work, p->filename_work, sizeof(p->filename_work));
 
   d->type = p->type;
   d->type_work = p->type_work;

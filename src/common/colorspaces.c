@@ -1431,9 +1431,7 @@ static GList *load_profile_from_dir(const char *subdir)
             dt_colorspaces_get_profile_name(tmpprof, lang, lang + 3,
                                             prof->name, sizeof(prof->name));
 
-            // profile directories are flat, so the base name identifies the profile
-            // independently of the user or installation directory that supplied it.
-            g_strlcpy(prof->filename, d_name, sizeof(prof->filename));
+            g_strlcpy(prof->filename, filename, sizeof(prof->filename));
             prof->type = DT_COLORSPACE_FILE;
             prof->profile = tmpprof;
             // these will be set after sorting!
@@ -2185,12 +2183,13 @@ static gboolean _colorspaces_is_base_name(const char *profile)
 static const char *_colorspaces_get_base_name(const char *profile)
 {
   const char* f = profile + strlen(profile);
-  for(; f > profile; f--)
+  for(; f >= profile; f--)
   {
-    if(f[-1] == '/' || f[-1] == '\\')
-      return f; // path separator found - return the filename only
+    if(*f == '/' || *f == '\\')
+      return ++f;   // path separator found - return the filename
+                    // only, without the leading separator
   }
-  return profile;   // no separator found - consider profile_name to
+  return f;         // no separator found - consider profile_name to
                     // be a "base" one
 }
 

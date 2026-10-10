@@ -528,6 +528,14 @@ static gboolean _ioppr_generate_profile_info(dt_iop_order_iccprofile_info_t *pro
   profile_info->nonlinearlut = 0;
   profile_info->grey = 0.1842f;
 
+  if(type == DT_COLORSPACE_FILE
+    && (!filename || !filename[0] || !g_file_test(filename, G_FILE_TEST_IS_REGULAR)))
+  {
+    dt_print(DT_DEBUG_PARAMS, "[generate_profile_info] icc profile '%s' not available",
+      filename ? filename : "???");
+    return TRUE;
+  }
+
   profile_info->type = type;
   g_strlcpy(profile_info->filename, filename, sizeof(profile_info->filename));
   profile_info->intent = intent;
@@ -538,15 +546,6 @@ static gboolean _ioppr_generate_profile_info(dt_iop_order_iccprofile_info_t *pro
 
   const dt_colorspaces_color_profile_t *profile =
     dt_colorspaces_get_profile(type, filename, DT_PROFILE_DIRECTION_ANY);
-
-  if(type == DT_COLORSPACE_FILE && !profile)
-  {
-    if(locking)
-      pthread_rwlock_unlock(&darktable.color_profiles->xprofile_lock);
-    dt_print(DT_DEBUG_PARAMS, "[generate_profile_info] icc profile '%s' not available",
-             filename ? filename : "???");
-    return TRUE;
-  }
 
   cmsHPROFILE *rgb_profile = profile ? profile->profile : NULL;;
 

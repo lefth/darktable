@@ -220,7 +220,7 @@ typedef struct dt_colorspaces_t
 typedef struct dt_colorspaces_color_profile_t
 {
   dt_colorspaces_color_profile_type_t type; // filename is only used for type DT_COLORSPACE_FILE
-  char filename[DT_IOP_COLOR_ICC_LEN];      // ICC base file name
+  char filename[DT_IOP_COLOR_ICC_LEN];      // icc file name
   char name[512];                           // product name, displayed in GUI
   cmsHPROFILE profile;                      // the actual profile
   int in_pos;                               // position in input combo box, -1 if not applicable
@@ -401,8 +401,10 @@ dt_colorspaces_get_profile(dt_colorspaces_color_profile_type_t type,
                            const char *filename,
                            const dt_colorspaces_profile_direction_t direction);
 
-/** check whether filename identifies the same profile as fullname;
- *  either may be a full path or a base name */
+/** check whether filename is the same profil as fullname, this is
+ *  taking into account that fullname is always the fullpathname to
+ *  the profile and filename may be a full pathname or just a base
+ *  name */
 gboolean  dt_colorspaces_is_profile_equal(const char *fullname,
                                           const char *filename);
 
