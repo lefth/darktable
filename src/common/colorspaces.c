@@ -2183,12 +2183,13 @@ static gboolean _colorspaces_is_base_name(const char *profile)
 static const char *_colorspaces_get_base_name(const char *profile)
 {
   const char* f = profile + strlen(profile);
-  for(; f > profile; f--)
+  for(; f >= profile; f--)
   {
-    if(f[-1] == '/' || f[-1] == '\\')
-      return f; // path separator found - return the filename only
+    if(*f == '/' || *f == '\\')
+      return ++f;   // path separator found - return the filename
+                    // only, without the leading separator
   }
-  return profile;   // no separator found - consider profile_name to
+  return f;         // no separator found - consider profile_name to
                     // be a "base" one
 }
 

@@ -67,36 +67,6 @@ static void _clear_lut_curves(dt_iop_order_iccprofile_info_t *const profile_info
   }
 }
 
-static char *_resolve_missing_profile_path(const char *filename, const char *subdir)
-{
-  if(!filename || !filename[0] || g_file_test(filename, G_FILE_TEST_IS_REGULAR)) return NULL;
-
-  const gboolean is_windows_path = g_ascii_isalpha(filename[0]) && filename[1] == ':'
-                                   && (filename[2] == '/' || filename[2] == '\\');
-  if(!g_path_is_absolute(filename) && !is_windows_path) return NULL;
-
-  const char *basename = strrchr(filename, '/');
-  const char *backslash = strrchr(filename, '\\');
-  if(backslash && (!basename || backslash > basename)) basename = backslash;
-  basename = basename ? basename + 1 : filename;
-  if(!basename[0]) return NULL;
-
-  char confdir[PATH_MAX] = { 0 };
-  char datadir[PATH_MAX] = { 0 };
-  dt_loc_get_user_config_dir(confdir, sizeof(confdir));
-  dt_loc_get_datadir(datadir, sizeof(datadir));
-
-  char *resolved = g_build_filename(confdir, "color", subdir, basename, NULL);
-  if(g_file_test(resolved, G_FILE_TEST_IS_REGULAR)) return resolved;
-
-  g_free(resolved);
-  resolved = g_build_filename(datadir, "color", subdir, basename, NULL);
-  if(g_file_test(resolved, G_FILE_TEST_IS_REGULAR)) return resolved;
-
-  g_free(resolved);
-  return NULL;
-}
-
 static void _transform_hdr_lcms(cmsHTRANSFORM xform,
                                 const float *const image_in,
                                 float *const image_out,
@@ -558,6 +528,14 @@ static gboolean _ioppr_generate_profile_info(dt_iop_order_iccprofile_info_t *pro
   profile_info->nonlinearlut = 0;
   profile_info->grey = 0.1842f;
 
+  if(type == DT_COLORSPACE_FILE
+    && (!filename || !filename[0] || !g_file_test(filename, G_FILE_TEST_IS_REGULAR)))
+  {
+    dt_print(DT_DEBUG_PARAMS, "[generate_profile_info] icc profile '%s' not available",
+      filename ? filename : "???");
+    return TRUE;
+  }
+
   profile_info->type = type;
   g_strlcpy(profile_info->filename, filename, sizeof(profile_info->filename));
   profile_info->intent = intent;
@@ -568,25 +546,8 @@ static gboolean _ioppr_generate_profile_info(dt_iop_order_iccprofile_info_t *pro
 
   const dt_colorspaces_color_profile_t *profile =
     dt_colorspaces_get_profile(type, filename, DT_PROFILE_DIRECTION_ANY);
-  if(type == DT_COLORSPACE_FILE && profile && filename && g_path_is_absolute(filename)
-     && strcmp(profile->filename, filename))
-    profile = NULL;
-  cmsHPROFILE *fallback_profile = NULL;
 
-  if(type == DT_COLORSPACE_FILE && !profile)
-  {
-    fallback_profile = filename ? cmsOpenProfileFromFile(filename, "r") : NULL;
-    if(!fallback_profile)
-    {
-      if(locking)
-        pthread_rwlock_unlock(&darktable.color_profiles->xprofile_lock);
-      dt_print(DT_DEBUG_PARAMS, "[generate_profile_info] icc profile '%s' not available",
-               filename ? filename : "???");
-      return TRUE;
-    }
-  }
-
-  cmsHPROFILE *rgb_profile = profile ? profile->profile : fallback_profile;
+  cmsHPROFILE *rgb_profile = profile ? profile->profile : NULL;;
 
   cmsColorSpaceSignature rgb_profile_color_space = rgb_profile ? cmsGetColorSpace(rgb_profile) : 0;
 
@@ -662,9 +623,6 @@ static gboolean _ioppr_generate_profile_info(dt_iop_order_iccprofile_info_t *pro
       (char)(rgb_profile_color_space),
       dt_is_valid_colormatrix(profile_info->matrix_in[0][0]) ? "" : " NO matrix provided",
       profile_info->nonlinearlut ? " nonlinearlut" : "");
-
-  if(fallback_profile)
-    cmsCloseProfile(fallback_profile);
 
   if(locking) // all safe now
     pthread_rwlock_unlock(&darktable.color_profiles->xprofile_lock);
@@ -769,14 +727,11 @@ dt_ioppr_set_pipe_work_profile_info(struct dt_develop_t *dev,
                                     const char *filename,
                                     const int intent)
 {
-  char *const resolved_filename = type == DT_COLORSPACE_FILE
-                                ? _resolve_missing_profile_path(filename, "out") : NULL;
-  const char *const profile_filename = resolved_filename ? resolved_filename : filename;
   dt_iop_order_iccprofile_info_t *profile_info =
-    dt_ioppr_add_profile_info_to_list(dev, type, profile_filename, intent);
+    dt_ioppr_add_profile_info_to_list(dev, type, filename, intent);
 
   if(!profile_info && dt_pipe_is_preview(pipe) && (type == DT_COLORSPACE_FILE))
-      dt_control_log(_("work icc profile '%s' missing"), profile_filename);
+      dt_control_log(_("work icc profile '%s' missing"), filename);
 
   if(profile_info == NULL
      || !dt_is_valid_colormatrix(profile_info->matrix_in[0][0])
@@ -785,10 +740,9 @@ dt_ioppr_set_pipe_work_profile_info(struct dt_develop_t *dev,
     dt_print(DT_DEBUG_ALWAYS,
              "[dt_ioppr_set_pipe_work_profile_info] unsupported working profile %s %s, "
              "it will be replaced with linear Rec2020",
-             dt_colorspaces_get_name(type, NULL), profile_filename);
+             dt_colorspaces_get_name(type, NULL), filename);
     profile_info = dt_ioppr_add_profile_info_to_list(dev, DT_COLORSPACE_LIN_REC2020, "", intent);
   }
-  g_free(resolved_filename);
   pipe->work_profile_info = profile_info;
 
   return profile_info;
@@ -802,21 +756,18 @@ dt_ioppr_set_pipe_input_profile_info(struct dt_develop_t *dev,
                                      const int intent,
                                      const dt_colormatrix_t matrix_in)
 {
-  char *const resolved_filename = type == DT_COLORSPACE_FILE
-                                ? _resolve_missing_profile_path(filename, "in") : NULL;
-  const char *const profile_filename = resolved_filename ? resolved_filename : filename;
   dt_iop_order_iccprofile_info_t *profile_info =
-    dt_ioppr_add_profile_info_to_list(dev, type, profile_filename, intent);
+    dt_ioppr_add_profile_info_to_list(dev, type, filename, intent);
 
   if(profile_info == NULL)
   {
     if(dt_pipe_is_preview(pipe) && (type == DT_COLORSPACE_FILE))
-      dt_control_log(_("input icc profile '%s' missing"), profile_filename);
+      dt_control_log(_("input icc profile '%s' missing"), filename);
 
     dt_print(DT_DEBUG_PIPE,
              "[dt_ioppr_set_pipe_input_profile_info] profile `%s' in `%s'"
              " replaced by linear Rec2020",
-             dt_colorspaces_get_name(type, NULL), profile_filename);
+             dt_colorspaces_get_name(type, NULL), filename);
     profile_info = dt_ioppr_add_profile_info_to_list(dev, DT_COLORSPACE_LIN_REC2020, "", intent);
   }
 
@@ -852,8 +803,6 @@ dt_ioppr_set_pipe_input_profile_info(struct dt_develop_t *dev,
   }
   pipe->input_profile_info = profile_info;
 
-  g_free(resolved_filename);
-
   return profile_info;
 }
 
@@ -864,14 +813,11 @@ dt_ioppr_set_pipe_output_profile_info(struct dt_develop_t *dev,
                                       const char *filename,
                                       const int intent)
 {
-  char *const resolved_filename = type == DT_COLORSPACE_FILE
-                                ? _resolve_missing_profile_path(filename, "out") : NULL;
-  const char *const profile_filename = resolved_filename ? resolved_filename : filename;
   dt_iop_order_iccprofile_info_t *profile_info =
-    dt_ioppr_add_profile_info_to_list(dev, type, profile_filename, intent);
+    dt_ioppr_add_profile_info_to_list(dev, type, filename, intent);
 
   if(!profile_info && dt_pipe_is_preview(pipe) && (type == DT_COLORSPACE_FILE))
-    dt_control_log(_("output icc profile '%s' missing"), profile_filename);
+    dt_control_log(_("output icc profile '%s' missing"), filename);
 
   if(profile_info == NULL
      || !dt_is_valid_colormatrix(profile_info->matrix_in[0][0])
@@ -883,13 +829,11 @@ dt_ioppr_set_pipe_output_profile_info(struct dt_develop_t *dev,
       // see discussion in https://github.com/darktable-org/darktable/issues/6774
       dt_print(DT_DEBUG_PIPE,
          "[dt_ioppr_set_pipe_output_profile_info] profile `%s' in `%s' replaced by sRGB",
-        dt_colorspaces_get_name(type, NULL), profile_filename);
+         dt_colorspaces_get_name(type, NULL), filename);
     }
     profile_info = dt_ioppr_add_profile_info_to_list(dev, DT_COLORSPACE_SRGB, "", intent);
   }
   pipe->output_profile_info = profile_info;
-
-  g_free(resolved_filename);
 
   return profile_info;
 }
@@ -901,12 +845,8 @@ dt_ioppr_set_pipe_export_profile_info(struct dt_develop_t *dev,
                                       const char *filename,
                                       const int intent)
 {
-  char *const resolved_filename = type == DT_COLORSPACE_FILE
-                                ? _resolve_missing_profile_path(filename, "out") : NULL;
-  const char *const profile_filename = resolved_filename ? resolved_filename : filename;
   dt_iop_order_iccprofile_info_t *profile_info =
-    dt_ioppr_add_profile_info_to_list(dev, type, profile_filename, intent);
-  g_free(resolved_filename);
+    dt_ioppr_add_profile_info_to_list(dev, type, filename, intent);
   pipe->export_profile_info = profile_info;
   return profile_info;
 }
